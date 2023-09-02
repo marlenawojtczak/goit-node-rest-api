@@ -1,7 +1,7 @@
-### Komendy:
+### Getting Started:
 
-- `npm install` &mdash;
-- `npm start` &mdash;
-- `npm run start:dev` &mdash;
-- `npm run lint` &mdash;
-- `npm lint:fix` &mdash;
+Make sure you have Node.js installed
+
+- `npm install`
+- `npm start`
+- `npm run start:dev`
