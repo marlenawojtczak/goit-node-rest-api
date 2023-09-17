@@ -1,4 +1,4 @@
-import * as service from "../service/index.js";
+import * as service from "../service/contacts.js";
 
 export const get = async (req, res, next) => {
   try {
