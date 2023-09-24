@@ -26,6 +26,10 @@ const userSchema = new Schema({
     type: Schema.Types.ObjectId,
     ref: "user",
   },
+  avatarURL: {
+    type: String,
+    default: null,
+  },
 });
 
 userSchema.methods.setPassword = function (password) {

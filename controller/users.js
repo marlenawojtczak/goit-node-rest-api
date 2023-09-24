@@ -1,6 +1,10 @@
 import Joi from "joi";
 import jwt from "jsonwebtoken";
 import passport from "passport";
+import gravatar from "gravatar";
+import jimp from "jimp";
+import path from "path";
+import fs from "fs/promises";
 
 import { User } from "../service/schemas/users.js";
 
@@ -73,7 +77,9 @@ export const signup = async (req, res, next) => {
   }
 
   try {
-    const newUser = new User({ email, subscription });
+    const avatarURL = gravatar.url(email, { s: "100", d: "retro" });
+
+    const newUser = new User({ email, subscription, avatarURL });
     newUser.setPassword(password);
     await newUser.save();
     res.status(201).json({
@@ -83,6 +89,7 @@ export const signup = async (req, res, next) => {
         user: {
           subscription: newUser.subscription || "starter",
           message: "Registration successful",
+          avatarURL: newUser.avatarURL,
         },
       },
     });
@@ -194,6 +201,47 @@ export const current = (req, res) => {
           email,
           subscription,
         },
+      });
+    }
+  } catch (error) {
+    console.error(error);
+  }
+};
+
+//AVATARS
+
+const storeAvatar = path.join(process.cwd(), "public/avatars");
+
+export const avatar = async (req, res, next) => {
+  const { path: temporaryName, originalname } = req.file;
+  const newAvatarFileName = `${req.user._id.toString()}.jpg`;
+  const newAvatarPath = path.join(storeAvatar, newAvatarFileName);
+  newAvatarPath;
+  try {
+    const avatar = await jimp.read(temporaryName);
+    await avatar.cover(250, 250).quality(60).write(newAvatarPath);
+    await fs.unlink(temporaryName);
+  } catch (err) {
+    return next(err);
+  }
+
+  try {
+    const id = req.user.id;
+    const user = getUser(id);
+    if (!user) {
+      return res.json({
+        status: "error",
+        code: 401,
+        data: {
+          message: `Unauthorized`,
+        },
+      });
+    } else {
+      user.avatarURL = `/avatars/${newAvatarFileName}`;
+      return res.json({
+        status: "success",
+        code: 200,
+        data: { avatarURL: user.avatarURL },
       });
     }
   } catch (error) {
