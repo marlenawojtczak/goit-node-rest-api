@@ -5,7 +5,10 @@ import gravatar from "gravatar";
 import jimp from "jimp";
 import path from "path";
 import fs from "fs/promises";
-
+import {
+  sendVerificationEmail,
+  generateVerificationToken,
+} from "../config/config-nodemailer.js";
 import { User } from "../service/schemas/users.js";
 
 const secret = process.env.SECRET;
@@ -18,6 +21,10 @@ const addUserSchema = Joi.object({
       "string.pattern.base":
         "Password must contain at least 8 characters, one uppercase letter, one digit, and one special character.",
     }),
+  email: Joi.string().email().required(),
+});
+
+const addEmailSchema = Joi.object({
   email: Joi.string().email().required(),
 });
 
@@ -81,7 +88,17 @@ export const signup = async (req, res, next) => {
 
     const newUser = new User({ email, subscription, avatarURL });
     newUser.setPassword(password);
+
+    const verificationToken = generateVerificationToken();
+
+    newUser.verificationToken = verificationToken;
     await newUser.save();
+
+    sendVerificationEmail({
+      email,
+      verificationToken: newUser.verificationToken,
+    });
+
     res.status(201).json({
       status: "success",
       code: 201,
@@ -119,6 +136,16 @@ export const login = async (req, res, next) => {
       data: "Bad request",
     });
   }
+
+  if (!user.verify) {
+    return res.status(401).json({
+      status: "error",
+      code: 401,
+      message: "Email is not verified",
+      data: "Unauthorized",
+    });
+  }
+
   try {
     const payload = {
       id: user.id,
@@ -246,5 +273,99 @@ export const avatar = async (req, res, next) => {
     }
   } catch (error) {
     console.error(error);
+  }
+};
+
+// EMAIL
+
+export const verification = async (req, res, next) => {
+  try {
+    const { verificationToken } = req.params;
+    const user = await User.findOne({ verificationToken });
+
+    if (!user) {
+      return res.status(404).json({
+        status: "error",
+        code: 404,
+        message: "User not found",
+        data: "Not Found",
+      });
+    }
+
+    await User.findByIdAndUpdate(user._id, {
+      verificationToken: "",
+      verify: true,
+    });
+
+    res.status(200).json({
+      status: "success",
+      code: 200,
+      data: {
+        message: "Verification successful",
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      status: "error",
+      code: 500,
+      message: "Internal Server Error",
+      data: "Verification process failed",
+    });
+  }
+};
+
+export const sendEmailAgain = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    const user = await User.findOne({ email });
+
+    const { error } = addEmailSchema.validate(req.body);
+
+    if (error) {
+      return res.status(400).json({
+        status: "error",
+        code: 400,
+        message: "Bad Request",
+        data: `${error.details[0].message}`,
+      });
+    }
+
+    if (!user) {
+      return res.status(404).json({
+        status: "error",
+        code: 404,
+        message: "User not found",
+        data: "Not Found",
+      });
+    }
+
+    if (user.verify) {
+      return res.status(400).json({
+        status: "error",
+        code: 400,
+        message: "Verification has already been passed",
+        data: "Bad Request",
+      });
+    }
+
+    sendVerificationEmail({
+      email,
+      verificationToken: user.verificationToken,
+    });
+
+    res.status(200).json({
+      status: "success",
+      code: 200,
+      message: "Verification email sent",
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      status: "error",
+      code: 500,
+      message: "Internal Server Error",
+      data: "Email Sending Failure",
+    });
   }
 };
